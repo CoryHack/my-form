@@ -113,4 +113,24 @@ function render(cfg) {
   const submit = el('button', { type:'submit' }, cfg.submitLabel || 'Calculate');
   form.append(submit);
 
-  const result = document.g
+  const result = document.getElementById('result');
+  form.hidden = false;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const values = collectValues(form, fields);
+    const total = tryComputeTotal(cfg, values);
+
+    result.hidden = false;
+    result.innerHTML = '';
+    if (total !== null && total !== undefined) {
+      result.append(el('div', { class:'total' }, `Total: ${new Intl.NumberFormat(undefined, { style:'currency', currency: cfg.currency || 'USD' }).format(total)}`));
+    }
+    result.append(el('pre', {}, JSON.stringify(values, null, 2)));
+  });
+}
+
+loadConfig().then(render).catch(err => {
+  document.getElementById('title').textContent = 'Error loading config';
+  document.getElementById('desc').textContent = String(err);
+});
