@@ -1,36 +1,105 @@
- <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>HVAC Quote Form</title>
-  <style>
-    :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    body { margin: 24px; background:#0b0c10; color:#e8e8e8; }
-    .card { max-width: 900px; margin: 0 auto; background:#12141a; padding:24px; border-radius:16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
-    h1 { margin: 0 0 12px; font-size: 24px; }
-    p.desc { margin: 0 0 20px; color:#b9c0cb; }
-    form { display:grid; gap:16px; }
-    .row { display:grid; gap:8px; }
-    .row.inline { grid-template-columns: 1fr auto; align-items:center; }
-    label { font-weight:600; }
-    input, select { width: 100%; padding:10px 12px; border-radius:12px; border:1px solid #2a2f3a; background:#0f1116; color:#e8e8e8; }
-    input[type="range"] { padding:0 }
-    .hint { font-size:12px; color:#9aa3b2; }
-    button { padding:12px 16px; border-radius:12px; border:0; background:#3b82f6; color:white; font-weight:700; cursor:pointer; }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    .result { margin-top:16px; padding:14px; background:#0f1116; border:1px dashed #2a2f3a; border-radius:12px; white-space:pre-wrap; }
-    .total { font-size:20px; font-weight:800; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1 id="title">Loading…</h1>
-    <p id="desc" class="desc"></p>
-    <form id="form" hidden></form>
-    <div id="result" class="result" hidden></div>
-  </div>
-  <script>
-<script defer src="script.js"></script> 
-</body>
-</html>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>HVAC Quote Form</title>
+<style>
+:root{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+body{margin:24px;background:#0b0c10;color:#e8e8e8}
+.card{max-width:900px;margin:0 auto;background:#12141a;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+h1{margin:0 0 12px;font-size:24px}.desc{margin:0 0 20px;color:#b9c0cb}
+form{display:grid;gap:16px}.row{display:grid;gap:8px}.row.inline{grid-template-columns:1fr auto;align-items:center}
+label{font-weight:600}input,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1116;color:#e8e8e8}
+input[type=range]{padding:0}.hint{font-size:12px;color:#9aa3b2}
+button{padding:12px 16px;border-radius:12px;border:0;background:#3b82f6;color:#fff;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.result{margin-top:16px;padding:14px;background:#0f1116;border:1px dashed #2a2f3a;border-radius:12px;white-space:pre-wrap}
+.total{font-size:20px;font-weight:800}
+.error{margin-top:16px;padding:12px;border-radius:12px;background:#2b1b1b;color:#ffd2d2;border:1px solid #512}
+</style>
+</head><body>
+<div class="card">
+  <h1 id="title">Loading…</h1>
+  <p id="desc" class="desc"></p>
+  <div id="err" class="error" style="display:none"></div>
+  <form id="form" hidden></form>
+  <div id="result" class="result" hidden></div>
+</div>
+
+<!-- 👇 PASTE YOUR JSON BETWEEN THESE TAGS (must be VALID JSON) -->
+<script type="application/json" id="cfg">
+{ "title":"HVAC Quote","description":"Fill inputs. Click Calculate.","currency":"USD",
+  "fields":[
+    { "name":"installer","label":"Installer","type":"select","options":["NP","CO","CS"],"required":true },
+    { "name":"hours","label":"Hours","type":"number","min":0,"step":0.5,"default":8 },
+    { "name":"warranty","label":"Warranty Cost","type":"number","min":0,"step":1,"default":0 },
+    { "name":"permit","label":"Permit Fee","type":"number","min":0,"default":0 },
+    { "name":"misc","label":"Misc Costs","type":"number","min":0,"default":0 },
+    { "name":"laborRate","label":"Loaded Labor $/hr","type":"number","min":0,"default":115 }
+  ],
+  "totalExpression":"values.hours * values.laborRate + values.warranty + values.permit + values.misc"
+}
+</script>
+<!-- 👆 KEEP IT STRICT: double quotes, no comments, no trailing commas. -->
+
+<script>
+const E=(t,a={},...c)=>{const n=document.createElement(t);for(const[k,v]of Object.entries(a)){if(k==="class")n.className=v;else if(k.startsWith("on")&&typeof v==="function")n.addEventListener(k.slice(2),v);else if(v!==undefined&&v!==null)n.setAttribute(k,v)}for(const x of c)n.append(x instanceof Node?x:document.createTextNode(String(x)));return n};
+const coerce=(v,t)=>t==="number"||t==="range"?Number(v||0):t==="checkbox"?!!v:(v??"");
+const showErr=m=>{const e=document.getElementById('err'); e.style.display='block'; e.textContent=m};
+function renderField(f){
+  const id=f.name, label=E("label",{for:id},f.label??f.name), hint=f.hint?E("div",{class:"hint"},f.hint):null; let input;
+  switch((f.type||"text").toLowerCase()){
+    case"select":{
+      input=E("select",{id,name:id,required:f.required?true:null});
+      const opts=Array.isArray(f.options)?f.options:(f.options&&typeof f.options==="object")?Object.entries(f.options).map(([v,l])=>({value:v,label:l})):[];
+      for(const o of opts){const val=typeof o==="string"?o:o.value, txt=typeof o==="string"?o:(o.label??o.value); input.append(E("option",{value:val},txt))}
+      if(f.default!==undefined) input.value=f.default; break;
+    }
+    case"number": case"text":{
+      input=E("input",{id,name:id,type:f.type||"text",required:f.required?true:null,min:f.min,max:f.max,step:f.step,placeholder:f.placeholder});
+      if(f.default!==undefined) input.value=f.default; break;
+    }
+    case"range":{
+      const out=E("span",{id:id+"_out"},"");
+      input=E("input",{id,name:id,type:"range",min:f.min??0,max:f.max??100,step:f.step??1,value:f.default??f.min??0,oninput:()=>out.textContent=input.value});
+      setTimeout(()=>input.dispatchEvent(new Event("input")),0);
+      return E("div",{class:"row inline"},E("div",{},label,hint??""),E("div",{},input," ",out));
+    }
+    case"checkbox":{
+      input=E("input",{id,name:id,type:"checkbox"}); if(f.default) input.checked=true;
+      return E("div",{class:"row inline"},E("div",{},label,hint??""),input);
+    }
+    default: input=E("input",{id,name:id,type:"text"});
+  }
+  const wrap=E("div",{class:"row"},label,input); if(hint) wrap.append(hint); return wrap;
+}
+function collect(form,fields){const v={}; for(const f of fields){const r=form.querySelector(`[name="${f.name}"]`); if(!r) continue; v[f.name]=f.type==="checkbox"?r.checked:coerce(r.value,f.type)} return v}
+function calcTotal(cfg,values){const ex=cfg.totalExpression||cfg.formula; if(!ex) return null; try{const fn=new Function("values",ex.startsWith("return")?ex:`return (${ex});`); const r=fn(values); return Number.isFinite(r)?Number(r):r}catch(e){showErr("Total calc error: "+e.message); return null}}
+function render(cfg){
+  document.getElementById('title').textContent=cfg.title||'Quote Form';
+  document.getElementById('desc').textContent=cfg.description||'';
+  const form=document.getElementById('form'); form.innerHTML='';
+  const fields=(cfg.fields||[]).map(f=>({...f,name:f.name||f.id||crypto.randomUUID()}));
+  for(const f of fields) form.append(renderField(f));
+  const submit=E('button',{type:'submit'},cfg.submitLabel||'Calculate'); form.append(submit);
+  const result=document.getElementById('result'); form.hidden=false;
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    const values=collect(form,fields);
+    const total=calcTotal(cfg,values);
+    result.hidden=false; result.innerHTML='';
+    if(total!==null&&total!==undefined){
+      result.append(E('div',{class:'total'},'Total: '+new Intl.NumberFormat(undefined,{style:'currency',currency:cfg.currency||'USD'}).format(total)));
+    }
+    result.append(E('pre',{},JSON.stringify(values,null,2)));
+  });
+}
+try{
+  const raw=document.getElementById('cfg').textContent.trim();
+  const cfg=JSON.parse(raw);
+  render(cfg);
+}catch(e){
+  document.getElementById('title').textContent='Invalid JSON';
+  document.getElementById('desc').textContent='Fix errors below.';
+  showErr(e.message);
+}
+</script>
+</body></html>
