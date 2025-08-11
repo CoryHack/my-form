@@ -16,9 +16,18 @@
     { "model": "ARVT960804CN", "total_cost": 2403.18 },
     { "model": "ARVT961005CN", "total_cost": 2584.18 },
     { "model": "ARVT961005DN", "total_cost": 2669.18 },
-    { "model": "ARVT961205DN", "total_cost": 2698.18 }
+    { "model": "ARVT961205DN", "total_cost": 2698.18 },
+    { "model": "ARVM970603BN", "total_cost": 2263.18 },
+    { "model": "ARVM970803BN", "total_cost": 2554.18 },
+    { "model": "ARVM970804CN", "total_cost": 2584.18 },
+    { "model": "ARVM971005CN", "total_cost": 2767.18 },
+    { "model": "ARVM971205DN", "total_cost": 2941.18 }
   ],
   "acs": [
+    { "model": "AZV7SA2410", "total_cost": 2674.15 },
+    { "model": "AZV7SA3610", "total_cost": 3200.15 },
+    { "model": "AZV7SA4210", "total_cost": 3321.15 },
+    { "model": "AZV7SA4810", "total_cost": 3560.47 },
     { "model": "AX6VSS1810", "total_cost": 2024.15 },
     { "model": "AX6VSS2410", "total_cost": 2096.15 },
     { "model": "AX6VSS3010", "total_cost": 2186.15 },
