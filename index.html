@@ -25,19 +25,345 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </div>
 
 <!-- 👇 PASTE YOUR JSON BETWEEN THESE TAGS (must be VALID JSON) -->
-<script type="application/json" id="cfg">
-{ "title":"HVAC Quote","description":"Fill inputs. Click Calculate.","currency":"USD",
-  "fields":[
-    { "name":"installer","label":"Installer","type":"select","options":["NP","CO","CS"],"required":true },
-    { "name":"hours","label":"Hours","type":"number","min":0,"step":0.5,"default":8 },
-    { "name":"warranty","label":"Warranty Cost","type":"number","min":0,"step":1,"default":0 },
-    { "name":"permit","label":"Permit Fee","type":"number","min":0,"default":0 },
-    { "name":"misc","label":"Misc Costs","type":"number","min":0,"default":0 },
-    { "name":"laborRate","label":"Loaded Labor $/hr","type":"number","min":0,"default":115 }
+import React, { useMemo, useState } from "react";
+
+/**
+ * HVAC Quote Builder – v3 (dependency‑free)
+ * Adds warranty, permit, and miscellaneous direct costs.
+ * Price formula: P = D / (1 - C - F - M)
+ */
+
+// ---- Embedded data (from your spreadsheets) ----
+const DEFAULT_DATA = {
+  installers: [
+    { name: 'Gregory', base_rate: 40.0, loaded_rate: 59.57 },
+    { name: 'Garrett', base_rate: 35.0, loaded_rate: 53.28 },
+    { name: 'Chase', base_rate: 32.0, loaded_rate: 49.51 },
+    { name: 'Colin', base_rate: 30.0, loaded_rate: 46.99 },
+    { name: 'Frank', base_rate: 23.0, loaded_rate: 38.18 },
+    { name: 'Angelo', base_rate: 20.0, loaded_rate: 34.41 },
+    { name: 'TJ', base_rate: 21.0, loaded_rate: 35.67 },
+    { name: 'Tyler', base_rate: 18.0, loaded_rate: 31.89 },
   ],
-  "totalExpression":"values.hours * values.laborRate + values.warranty + values.permit + values.misc"
+  furnaces: [
+    { model: 'ARVT960403BN', total_cost: 1991.18 },
+    { model: 'ARVT960603BN', total_cost: 2056.18 },
+    { model: 'ARVT960803BN', total_cost: 2359.18 },
+    { model: 'ARVT960804CN', total_cost: 2403.18 },
+    { model: 'ARVT961005CN', total_cost: 2584.18 },
+    { model: 'ARVT961005DN', total_cost: 2669.18 },
+    { model: 'ARVT961205DN', total_cost: 2698.18 },
+  ],
+  acs: [
+    { model: 'AX6VSS1810', total_cost: 2024.15 },
+    { model: 'AX6VSS2410', total_cost: 2096.15 },
+    { model: 'AX6VSS3010', total_cost: 2186.15 },
+    { model: 'AX6VSS3610', total_cost: 2359.47 },
+    { model: 'AX6VSS4210', total_cost: 2501.47 },
+    { model: 'AX6VSS4810', total_cost: 2642.47 },
+    { model: 'AX6VSS6010', total_cost: 2970.47 },
+  ],
+  coils: [
+    { model: 'CAPEA2418B3', total_cost: null },
+    { model: 'CAPEA3022B3', total_cost: null },
+    { model: 'CAPEA3626B3', total_cost: null },
+    { model: 'CAPEA3626C3', total_cost: null },
+    { model: 'CAPEA4830C3', total_cost: null },
+    { model: 'CAPEA4830D3', total_cost: null },
+    { model: 'CAPEA6030D3', total_cost: null },
+  ],
+  financingPlans: [
+    { name: '5 Year - 9.99', percent: 0.0625 },
+    { name: '10 Year - 9.99', percent: 0.0675 },
+    { name: '12 Month No Promo', percent: 0.055 },
+    { name: '3 Year Equal Pay', percent: 0.1875 },
+    { name: 'Credit Card', percent: 0.03 },
+    { name: 'Check/Cash', percent: 0.0 },
+  ],
+};
+
+const Box = ({ title, children }) => (
+  <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+    {title && <div className="mb-2 text-sm font-semibold tracking-tight">{title}</div>}
+    {children}
+  </div>
+);
+
+const Row = ({ label, value, bold }) => (
+  <div className="flex items-center justify-between text-sm py-0.5">
+    <div className="opacity-70">{label}</div>
+    <div className={bold ? 'font-semibold' : ''}>{value}</div>
+  </div>
+);
+
+function currency(n) {
+  const v = Number.isFinite(n) ? n : 0;
+  return v.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 }
-</script>
+
+function num(v) {
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  return Number.isFinite(n) ? n : 0;
+}
+
+export default function App() {
+  const [data, setData] = useState(DEFAULT_DATA);
+  const [installers, setInstallers] = useState([
+    { name: '', hours: '' },
+    { name: '', hours: '' },
+    { name: '', hours: '' },
+    { name: '', hours: '' },
+  ]);
+  const [globalHours, setGlobalHours] = useState(8);
+  const [furnace, setFurnace] = useState('');
+  const [ac, setAc] = useState('');
+  const [coil, setCoil] = useState('');
+
+  // direct cost adders
+  const [thermostat, setThermostat] = useState(0);
+  const [warrantyCost, setWarrantyCost] = useState(0);
+  const [permitFee, setPermitFee] = useState(0);
+  const [miscCost, setMiscCost] = useState(0);
+
+  const [commissionPct, setCommissionPct] = useState(4); // 2–10
+  const [financingName, setFinancingName] = useState(data.financingPlans[0]?.name ?? 'Check/Cash');
+  const [marginPct, setMarginPct] = useState(50); // 40–60
+  const [showData, setShowData] = useState(false);
+  const [dataText, setDataText] = useState(JSON.stringify(DEFAULT_DATA, null, 2));
+
+  const instMap = useMemo(() => Object.fromEntries(data.installers.map(i => [i.name, i])), [data]);
+  const fMap = useMemo(() => Object.fromEntries(data.furnaces.map(i => [i.model, i.total_cost ?? 0])), [data]);
+  const aMap = useMemo(() => Object.fromEntries(data.acs.map(i => [i.model, i.total_cost ?? 0])), [data]);
+  const cMap = useMemo(() => Object.fromEntries(data.coils.map(i => [i.model, i.total_cost ?? 0])), [data]);
+  const financePct = useMemo(() => (data.financingPlans.find(p => p.name === financingName)?.percent ?? 0), [data, financingName]);
+
+  // costs
+  let labor = 0;
+  installers.forEach((slot) => {
+    if (!slot.name) return;
+    const r = instMap[slot.name]?.loaded_rate ?? 0;
+    const h = slot.hours !== '' ? num(slot.hours) : num(globalHours);
+    labor += r * h;
+  });
+  const equip = (fMap[furnace] || 0) + (aMap[ac] || 0) + (cMap[coil] || 0);
+  const D = labor + equip + num(thermostat) + num(warrantyCost) + num(permitFee) + num(miscCost);
+
+  const C = commissionPct / 100;
+  const F = financePct;
+  const M = marginPct / 100;
+  const denom = 1 - C - F - M;
+  const price = denom > 0 ? D / denom : NaN;
+
+  const commission$ = Number.isFinite(price) ? price * C : NaN;
+  const financing$  = Number.isFinite(price) ? price * F : NaN;
+  const gm$         = Number.isFinite(price) ? price * M : NaN;
+  const cogs$       = Number.isFinite(price) ? price - gm$ : NaN;
+
+  const reset = () => {
+    setInstallers([{name:'',hours:''},{name:'',hours:''},{name:'',hours:''},{name:'',hours:''}]);
+    setGlobalHours(8);
+    setFurnace(''); setAc(''); setCoil('');
+    setThermostat(0); setWarrantyCost(0); setPermitFee(0); setMiscCost(0);
+    setCommissionPct(4);
+    setFinancingName(data.financingPlans[0]?.name ?? 'Check/Cash');
+    setMarginPct(50);
+  };
+
+  const tryLoadData = () => {
+    try {
+      const parsed = JSON.parse(dataText);
+      if (!parsed.installers || !parsed.furnaces || !parsed.acs || !parsed.coils) throw new Error('Missing required keys');
+      if (!parsed.financingPlans) parsed.financingPlans = DEFAULT_DATA.financingPlans;
+      setData(parsed);
+      setShowData(false);
+    } catch (e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">HVAC Quote Builder</h1>
+          <div className="flex gap-2">
+            <button className="rounded-xl border px-3 py-2 text-sm" onClick={() => setShowData(true)}>Data</button>
+            <button className="rounded-xl border px-3 py-2 text-sm" onClick={reset}>Reset</button>
+          </div>
+        </div>
+
+        <Box title="Installers">
+          <div className="flex items-center gap-3 mb-3">
+            <label className="text-sm">Global hours</label>
+            <input className="w-24 rounded border px-2 py-1" type="number" min={0} value={globalHours}
+                   onChange={e => setGlobalHours(num(e.target.value))} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {installers.map((slot, idx) => (
+              <div key={idx} className="grid grid-cols-12 items-center gap-2 rounded-xl border p-3">
+                <div className="col-span-6">
+                  <div className="text-xs mb-1">Installer {idx+1}</div>
+                  <select className="w-full rounded border px-2 py-2" value={slot.name}
+                          onChange={e => {
+                            const next = installers.slice();
+                            next[idx] = { ...next[idx], name: e.target.value };
+                            setInstallers(next);
+                          }}>
+                    <option value="">— Select installer —</option>
+                    {data.installers.map(i => (
+                      <option key={i.name} value={i.name}>{i.name} — ${i.base_rate}/hr · Loaded ${i.loaded_rate}/hr</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-3">
+                  <div className="text-xs mb-1">Hours (override)</div>
+                  <input className="w-full rounded border px-2 py-2" type="number" min={0} value={slot.hours}
+                         onChange={e => {
+                           const next = installers.slice();
+                           next[idx] = { ...next[idx], hours: e.target.value };
+                           setInstallers(next);
+                         }} />
+                </div>
+                <div className="col-span-3 text-right text-sm opacity-70">
+                  {(() => {
+                    if (!slot.name) return '—';
+                    const r = instMap[slot.name]?.loaded_rate ?? 0;
+                    const h = slot.hours !== '' ? num(slot.hours) : num(globalHours);
+                    return currency(r * h);
+                  })()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Box>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Box title="Furnace">
+            <select className="w-full rounded border px-2 py-2" value={furnace} onChange={e => setFurnace(e.target.value)}>
+              <option value="">— Select furnace —</option>
+              {data.furnaces.map(x => (
+                <option key={x.model} value={x.model}>{x.model} — {x.total_cost != null ? `$${x.total_cost}` : '—'}</option>
+              ))}
+            </select>
+          </Box>
+          <Box title="AC">
+            <select className="w-full rounded border px-2 py-2" value={ac} onChange={e => setAc(e.target.value)}>
+              <option value="">— Select AC —</option>
+              {data.acs.map(x => (
+                <option key={x.model} value={x.model}>{x.model} — {x.total_cost != null ? `$${x.total_cost}` : '—'}</option>
+              ))}
+            </select>
+          </Box>
+          <Box title="Coil">
+            <select className="w-full rounded border px-2 py-2" value={coil} onChange={e => setCoil(e.target.value)}>
+              <option value="">— Select coil —</option>
+              {data.coils.map(x => (
+                <option key={x.model} value={x.model}>{x.model} — {x.total_cost != null ? `$${x.total_cost}` : '— (0)'} </option>
+              ))}
+            </select>
+          </Box>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Box title="Thermostat ($)">
+            <input className="w-full rounded border px-2 py-2" type="number" min={0}
+                   value={thermostat} onChange={e => setThermostat(e.target.value)} />
+          </Box>
+          <Box title="Warranty ($)">
+            <input className="w-full rounded border px-2 py-2" type="number" min={0}
+                   value={warrantyCost} onChange={e => setWarrantyCost(e.target.value)} />
+          </Box>
+          <Box title="Permit fee ($)">
+            <input className="w-full rounded border px-2 py-2" type="number" min={0}
+                   value={permitFee} onChange={e => setPermitFee(e.target.value)} />
+          </Box>
+          <Box title="Miscellaneous ($)">
+            <input className="w-full rounded border px-2 py-2" type="number" min={0}
+                   value={miscCost} onChange={e => setMiscCost(e.target.value)} />
+          </Box>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Box title={`Commission: ${commissionPct}%`}>
+            <input type="range" min={2} max={10} step={0.5} value={commissionPct}
+                   onChange={e => setCommissionPct(parseFloat(e.target.value))} className="w-full"/>
+          </Box>
+          <Box title="Financing plan">
+            <select className="w-full rounded border px-2 py-2" value={financingName}
+                    onChange={e => setFinancingName(e.target.value)}>
+              {data.financingPlans.map(p => (
+                <option key={p.name} value={p.name}>{p.name} — {(p.percent*100).toFixed(2)}% dealer fee</option>
+              ))}
+            </select>
+          </Box>
+          <Box title={`Target Margin: ${marginPct}%`}>
+            <input type="range" min={40} max={60} step={1} value={marginPct}
+                   onChange={e => setMarginPct(parseFloat(e.target.value))} className="w-full"/>
+            <div className="text-xs text-neutral-500 mt-1">Gross margin on final selling price. Price solves after commission + financing.</div>
+          </Box>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Box title="Direct Costs">
+            <Row label="Labor" value={currency(labor)} />
+            <Row label="Equipment (Furn+AC+Coil)" value={currency(equip)} />
+            <Row label="Thermostat" value={currency(num(thermostat))} />
+            <Row label="Warranty" value={currency(num(warrantyCost))} />
+            <Row label="Permit fee" value={currency(num(permitFee))} />
+            <Row label="Miscellaneous" value={currency(num(miscCost))} />
+            <div className="h-px bg-neutral-200 my-2" />
+            <Row label="Total Direct" value={currency(D)} bold />
+          </Box>
+          <Box title="Built-in Fees">
+            <Row label="Commission ($)" value={Number.isFinite(commission$) ? currency(commission$) : '—'} />
+            <Row label="Financing ($)" value={Number.isFinite(financing$) ? currency(financing$) : '—'} />
+            <Row label="COGS (excl. margin)" value={Number.isFinite(cogs$) ? currency(cogs$) : '—'} />
+          </Box>
+          <Box title="Final Price">
+            {denom <= 0 ? (
+              <div className="text-sm text-red-600">Invalid: 1 − commission − financing − margin ≤ 0. Reduce one.</div>
+            ) : (
+              <>
+                <div className="text-3xl font-semibold">{currency(price)}</div>
+                <Row label="Gross Margin ($)" value={currency(gm$)} />
+                <button className="mt-3 w-full rounded-xl border px-3 py-2 text-sm"
+                        onClick={() => {
+                          const payload = {
+                            selections: { installers, furnace, ac, coil, thermostat, warrantyCost, permitFee, miscCost, commissionPct, financingName, marginPct },
+                            direct_costs: { labor, equip, thermostat: num(thermostat), warranty: num(warrantyCost), permit: num(permitFee), misc: num(miscCost), total: D },
+                            price_breakdown: { price, commission: commission$, financing: financing$, gross_margin: gm$ },
+                            generated_at: new Date().toISOString(),
+                          };
+                          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = 'quote.json'; a.click();
+                          URL.revokeObjectURL(url);
+                        }}>Export JSON</button>
+              </>
+            )}
+          </Box>
+        </div>
+
+        {showData && (
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl rounded-2xl bg-white p-4">
+              <div className="mb-2 text-sm font-semibold">Load / Edit Data JSON</div>
+              <textarea className="w-full h-72 rounded border p-2 font-mono text-xs" value={dataText}
+                        onChange={e => setDataText(e.target.value)} />
+              <div className="mt-3 flex justify-end gap-2">
+                <button className="rounded-xl border px-3 py-2 text-sm" onClick={() => setShowData(false)}>Cancel</button>
+                <button className="rounded-xl border px-3 py-2 text-sm" onClick={tryLoadData}>Load</button>
+                <button className="rounded-xl border px-3 py-2 text-sm" onClick={() => setDataText(JSON.stringify(data, null, 2))}>Load current</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 <!-- 👆 KEEP IT STRICT: double quotes, no comments, no trailing commas. -->
 
 <script>
