@@ -1,0 +1,47 @@
+{
+  "installers": [
+    { "name": "Gregory", "base_rate": 40.0, "loaded_rate": 59.57 },
+    { "name": "Garrett", "base_rate": 35.0, "loaded_rate": 53.28 },
+    { "name": "Chase",   "base_rate": 32.0, "loaded_rate": 49.51 },
+    { "name": "Colin",   "base_rate": 30.0, "loaded_rate": 46.99 },
+    { "name": "Frank",   "base_rate": 23.0, "loaded_rate": 38.18 },
+    { "name": "Angelo",  "base_rate": 20.0, "loaded_rate": 34.41 },
+    { "name": "TJ",      "base_rate": 21.0, "loaded_rate": 35.67 },
+    { "name": "Tyler",   "base_rate": 18.0, "loaded_rate": 31.89 }
+  ],
+  "furnaces": [
+    { "model": "ARVT960403BN", "total_cost": 1991.18 },
+    { "model": "ARVT960603BN", "total_cost": 2056.18 },
+    { "model": "ARVT960803BN", "total_cost": 2359.18 },
+    { "model": "ARVT960804CN", "total_cost": 2403.18 },
+    { "model": "ARVT961005CN", "total_cost": 2584.18 },
+    { "model": "ARVT961005DN", "total_cost": 2669.18 },
+    { "model": "ARVT961205DN", "total_cost": 2698.18 }
+  ],
+  "acs": [
+    { "model": "AX6VSS1810", "total_cost": 2024.15 },
+    { "model": "AX6VSS2410", "total_cost": 2096.15 },
+    { "model": "AX6VSS3010", "total_cost": 2186.15 },
+    { "model": "AX6VSS3610", "total_cost": 2359.47 },
+    { "model": "AX6VSS4210", "total_cost": 2501.47 },
+    { "model": "AX6VSS4810", "total_cost": 2642.47 },
+    { "model": "AX6VSS6010", "total_cost": 2970.47 }
+  ],
+  "coils": [
+    { "model": "CAPEA2418B3", "total_cost": 463 },
+    { "model": "CAPEA3022B3", "total_cost": 506 },
+    { "model": "CAPEA3626B3", "total_cost": 542 },
+    { "model": "CAPEA3626C3", "total_cost": 559 },
+    { "model": "CAPEA4830C3", "total_cost": 598 },
+    { "model": "CAPEA4830D3", "total_cost": 606 },
+    { "model": "CAPEA6030D3", "total_cost": 624 }
+  ],
+  "financingPlans": [
+    { "name": "5 Year - 9.99",      "percent": 0.0625 },
+    { "name": "10 Year - 9.99",     "percent": 0.0675 },
+    { "name": "12 Month No Promo",  "percent": 0.055  },
+    { "name": "3 Year Equal Pay",   "percent": 0.1875 },
+    { "name": "Credit Card",        "percent": 0.03   },
+    { "name": "Check/Cash",         "percent": 0.0    }
+  ]
+}
